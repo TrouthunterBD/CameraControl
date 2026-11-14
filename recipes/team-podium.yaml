@@ -1,0 +1,20 @@
+id: team-podium
+name: Team photos and podium
+intent: Still groups on deck; sharp faces, natural skin tones
+dial: A
+usb:
+  capturesettings/aperture: "4.0"
+  imgsettings/iso: Auto
+  capturesettings/exposurecompensation: 0.3   # bright water/tile backgrounds tend to darken faces
+  capturesettings/exposuremetermode: ESP
+  capturesettings/focusmode: S-AF
+  capturesettings/afareasetting: Large
+  capturesettings/subjectdetection: Human
+  capturesettings/drivemode: Sequential       # a few frames per pose to beat blinks
+  capturesettings/imagestabilization: S-IS Auto
+  imgsettings/whitebalance: Automatic
+  imgsettings/imageformat: "Preset 2 + RAW: Large Fine + RAW"
+manual:
+  - ISO Auto upper limit 3200
+  - ISO Auto minimum shutter 1/250 (set on camera; Custom = 1/250 is also settable over USB)
+notes: For a wide group stop down to f/5.6 so the back row is sharp too.

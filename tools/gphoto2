@@ -1,0 +1,10 @@
+#!/bin/zsh
+# Homebrew's gphoto2 running against the libgphoto2 built by build-libgphoto2.sh.
+# Also stops macOS's ptpcamerad, which otherwise grabs the camera.
+lib=${0:A:h}/.libgphoto2/install/lib
+[[ -d $lib ]] || { echo "Run tools/build-libgphoto2.sh first." >&2; exit 1; }
+export DYLD_LIBRARY_PATH=$lib
+export CAMLIBS=$(echo $lib/libgphoto2/[0-9]*(N[1]))
+export IOLIBS=$(echo $lib/libgphoto2_port/[0-9]*(N[1]))
+killall ptpcamerad 2>/dev/null
+exec /opt/homebrew/bin/gphoto2 "$@"

@@ -1,0 +1,19 @@
+id: swim-racing
+name: Swimming – racing lanes
+intent: Freeze strokes and splashes mid-lane; track a swimmer's head and face
+dial: S                     # set on camera, not settable over USB
+usb:                        # gphoto2 config path (under /main/) → value
+  capturesettings/shutterspeed: 1/1000
+  imgsettings/iso: Auto
+  capturesettings/exposurecompensation: 0
+  capturesettings/exposuremetermode: ESP
+  capturesettings/focusmode: C-AF
+  capturesettings/afareasetting: Mid
+  capturesettings/subjectdetection: Human
+  capturesettings/drivemode: Sequential      # mechanical shutter, avoids flicker banding
+  capturesettings/imagestabilization: S-IS Auto
+  imgsettings/whitebalance: Automatic        # shoot RAW, fix mixed pool light later
+  imgsettings/imageformat: "Preset 2 + RAW: Large Fine + RAW"
+manual:                     # not exposed over USB; set on camera before assigning
+  - ISO Auto upper limit 6400
+notes: Butterfly and breaststroke peak when the head comes up. Burst through the breath.

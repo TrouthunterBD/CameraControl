@@ -1,0 +1,12 @@
+id: swim-meet-indoor
+name: Indoor swim meet
+conditions: Indoor pool, artificial light (likely LED/fluorescent flicker), humid, fast subjects in water
+slots:
+  C1: swim-racing
+  C2: dive-action
+  C3: team-podium
+  C4: swim-low-light
+notes: |
+  Shoot a test burst in the first few minutes and check for banding. If you see it, set Flicker Scan
+  on the camera for C2 and re-assign (electronic shutter is the one that bands).
+  Humidity: let the camera and lens warm up in the bag for 10–15 minutes before you take them out, so they don't fog.

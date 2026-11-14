@@ -1,0 +1,22 @@
+id: dive-action
+name: Diving – board and race starts
+intent: Catch the exact peak / entry moment, including frames from just before you pressed the shutter
+dial: S
+usb:
+  capturesettings/shutterspeed: 1/2000
+  imgsettings/iso: Auto
+  capturesettings/exposurecompensation: 0
+  capturesettings/exposuremetermode: ESP
+  capturesettings/focusmode: C-AF
+  capturesettings/afareasetting: Mid
+  capturesettings/subjectdetection: Human
+  capturesettings/drivemode: Pro Capture SH2  # electronic shutter, C-AF tracking; can band under flicker
+  capturesettings/procapturesh2framelimiter: "On"
+  capturesettings/imagestabilization: S-IS Auto
+  imgsettings/whitebalance: Automatic
+  imgsettings/imageformat: "Preset 2 + RAW: Large Fine + RAW"
+manual:
+  - ISO Auto upper limit 6400
+  - Pro Capture SH2 pre-shutter frames (start at ~20) and frame count limit
+  - If banding shows in test shots, turn on Flicker Scan and adjust until bands disappear
+notes: Half-press as the diver sets up, full press at takeoff; Pro Capture keeps the frames before it.

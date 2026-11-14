@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Walk through loading a kit's recipes into the OM-1 Mark II's C1–C4 slots.
+
+  tools/load-kit swim-meet-indoor            # all slots in the kit
+  tools/load-kit swim-meet-indoor --slot C1  # just one slot
+  tools/load-kit swim-meet-indoor --dry-run  # show the steps, don't touch the camera
+
+Each slot goes: set the dial and manual items (unplugged) → plug in → script pushes the
+USB settings and checks them → unplug → you assign to C*n* on the camera → optional check.
+The script pauses at every step until you answer.
+"""
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+GPHOTO = ROOT / "tools" / "gphoto2"
+
+
+# ---------- tiny reader for our recipe/kit YAML (flat scalars, one-level maps, lists, | blocks)
+def load_yaml(path):
+    data, key, mode, lines = {}, None, None, Path(path).read_text().splitlines()
+    for raw in lines:
+        line = raw.split(" #")[0].rstrip() if not raw.lstrip().startswith("- ") else raw.rstrip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" "):  # top-level key
+            k, _, v = line.partition(":")
+            key, v = k.strip(), v.strip()
+            if v == "|":
+                data[key], mode = "", "block"
+            elif v:
+                data[key], mode = unquote(v), None
+            else:
+                data[key], mode = None, "nested"
+            continue
+        s = line.strip()
+        if mode == "block":
+            data[key] += s + "\n"
+        elif s.startswith("- "):
+            data[key] = (data[key] or []) + [unquote(s[2:].split(" #")[0])]
+        else:
+            k, _, v = s.partition(":")
+            data[key] = data[key] or {}
+            data[key][k.strip()] = unquote(v.strip())
+    return data
+
+
+def unquote(v):
+    v = v.strip()
+    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
+
+
+# ---------- camera
+def gphoto(*args):
+    r = subprocess.run([str(GPHOTO), *args], capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+def camera_present():
+    code, out = gphoto("--auto-detect")
+    return "OM-1MarkII" in out
+
+
+def read(paths):
+    """Read several settings in one session. Returns {path: current}."""
+    args = []
+    for p in paths:
+        args += ["--get-config", "/main/" + p]
+    _, out = gphoto(*args)
+    vals, it = {}, iter(paths)
+    for line in out.splitlines():
+        if line.startswith("Current:"):
+            vals[next(it, None)] = line[len("Current:"):].strip()
+    return vals
+
+
+def push(settings):
+    """Set all settings in one session (fewer reconnects = less chance of the camera hanging)."""
+    args = []
+    for p, v in settings.items():
+        args += ["--set-config", f"/main/{p}={v}"]
+    code, out = gphoto(*args)
+    return code == 0, out
+
+
+# ---------- prompts
+def pause(msg, options="Enter = continue, q = quit"):
+    print()
+    for line in msg.strip().splitlines():
+        print("  " + line)
+    try:
+        ans = input(f"\n  [{options}] > ").strip().lower()
+    except EOFError:
+        ans = "q"
+    if ans == "q":
+        print("Stopped.")
+        sys.exit(0)
+    return ans
+
+
+def step(n, total, title):
+    print(f"\n── Step {n}/{total}: {title} " + "─" * max(0, 50 - len(title)))
+
+
+def same(a, b):
+    try:
+        return float(a) == float(b)
+    except ValueError:
+        return a.strip().lower() == b.strip().lower()
+
+
+# ---------- one slot
+DIAL_NAMES = {"P": "P", "A": "A", "S": "S", "M": "M"}
+
+
+def load_slot(slot, recipe, dry):
+    usb = recipe.get("usb") or {}
+    manual = recipe.get("manual") or []
+    dial = recipe.get("dial", "?")
+    print(f"\n════ {slot}: {recipe.get('name', recipe['id'])} ════")
+    if recipe.get("intent"):
+        print(f"  {recipe['intent']}")
+
+    # 1. camera-side setup while unplugged
+    step(1, 5, "Set up on the camera (unplugged)")
+    todo = [f"Turn the mode dial to {dial}  (not C1–C4: changes made in a C mode don't stick)"]
+    todo += manual
+    pause("Unplug the USB cable, then on the camera:\n" + "\n".join(f"  • {t}" for t in todo)
+          + "\nDone?")
+
+    # 2. connect
+    step(2, 5, "Connect")
+    while True:
+        pause("Plug the cable in. If the camera asks for a USB mode, choose RAW/Control.\nReady?")
+        if dry or camera_present():
+            break
+        a = pause("I can't see the camera. Check it's on and plugged in, and that you chose RAW/Control.\n"
+                  "If it was working before, turn the camera off and on.", "Enter = try again, q = quit")
+
+    if not dry:
+        v = read(["capturesettings/expprogram", "capturesettings/custommode"])
+        now = v.get("capturesettings/expprogram", "?")
+        cmode = v.get("capturesettings/custommode", "Off")
+        if cmode != "Off":  # on C1–C4 the camera reports that slot's base mode, so check this first
+            pause(f"The dial is on {cmode}. Changes made in a C mode don't stick.\n"
+                  f"Unplug, turn the dial to {dial}, plug back in, then continue.")
+        elif dial in DIAL_NAMES and now != dial:
+            pause(f"The camera reports the dial is on {now}, but this recipe wants {dial}.\n"
+                  "Unplug, turn the dial, plug back in, then continue (or continue anyway).")
+
+    # 3. push
+    step(3, 5, f"Push {len(usb)} settings")
+    for p, v in usb.items():
+        print(f"  {p.split('/')[-1]:<28} → {v}")
+    if dry:
+        print("  (dry run: not sent)")
+    else:
+        while True:
+            ok, out = push(usb)
+            got = read(list(usb))
+            wrong = {p: (v, got.get(p)) for p, v in usb.items() if got.get(p) is None or not same(got[p], v)}
+            if ok and not wrong:
+                print("  ✓ All settings confirmed on the camera.")
+                break
+            print("  ✗ Some settings didn't take:" if wrong else "  ✗ gphoto2 reported an error:")
+            for p, (want, have) in wrong.items():
+                print(f"     {p.split('/')[-1]:<28} wanted {want}, camera has {have}")
+            if not wrong:
+                print("     " + out.strip().splitlines()[-1] if out.strip() else "")
+            a = pause("Try again? (If it keeps failing, turn the camera off and on, choose RAW/Control.)",
+                      "Enter = retry, s = skip and continue, q = quit")
+            if a == "s":
+                break
+
+    # 4. assign on camera
+    step(4, 5, f"Save to {slot} on the camera")
+    pause("Unplug the USB cable (don't turn the camera off yet), then:\n"
+          f"  MENU → Assign to Custom Mode → {slot} → Set\n"
+          "Done?")
+
+    # 5. verify
+    step(5, 5, "Check it stuck (optional)")
+    a = pause(f"To check: turn the dial to {slot}, plug in, choose RAW/Control.",
+              "Enter = check, s = skip, q = quit")
+    if a == "s" or dry:
+        return
+    while not camera_present():
+        pause("I can't see the camera. Plug in / choose RAW/Control.", "Enter = try again, q = quit")
+    got = read(["capturesettings/custommode", *usb])
+    print(f"  Camera reports custom mode: {got.get('capturesettings/custommode', '?')}")
+    bad = [p for p, v in usb.items() if got.get(p) is None or not same(got[p], v)]
+    if bad:
+        print(f"  ✗ {len(bad)} setting(s) differ in {slot}:")
+        for p in bad:
+            print(f"     {p.split('/')[-1]:<28} wanted {usb[p]}, {slot} has {got.get(p)}")
+    else:
+        print(f"  ✓ {slot} matches the recipe.")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Load a kit's recipes into C1–C4, step by step.")
+    ap.add_argument("kit", help="kit id (file in kits/) or path")
+    ap.add_argument("--slot", help="only this slot, e.g. C1")
+    ap.add_argument("--dry-run", action="store_true", help="walk through without touching the camera")
+    a = ap.parse_args()
+
+    kit_path = Path(a.kit) if a.kit.endswith(".yaml") else ROOT / "kits" / f"{a.kit}.yaml"
+    kit = load_yaml(kit_path)
+    slots = kit.get("slots") or {}
+    if a.slot:
+        slots = {k: v for k, v in slots.items() if k.upper() == a.slot.upper()}
+        if not slots:
+            sys.exit(f"{a.slot} isn't in {kit_path.name}")
+
+    print(f"Kit: {kit.get('name', kit['id'])}")
+    for s, r in slots.items():
+        print(f"  {s}: {r}")
+    if kit.get("notes"):
+        print("\n" + "\n".join("  " + l for l in kit["notes"].strip().splitlines()))
+    pause("Camera on, battery OK, USB cable to hand?", "Enter = start, q = quit")
+
+    for slot, rid in slots.items():
+        load_slot(slot, load_yaml(ROOT / "recipes" / f"{rid}.yaml"), a.dry_run)
+
+    print("\nAll done. Turn the dial to each C slot to use it.")
+
+
+if __name__ == "__main__":
+    main()

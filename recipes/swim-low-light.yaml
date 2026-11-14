@@ -1,0 +1,19 @@
+id: swim-low-light
+name: Swimming – dim pool backup
+intent: Fallback when C1 is too noisy; trades some freeze for cleaner files
+dial: S
+usb:
+  capturesettings/shutterspeed: 1/640
+  imgsettings/iso: Auto
+  capturesettings/exposurecompensation: 0
+  capturesettings/exposuremetermode: ESP
+  capturesettings/focusmode: C-AF
+  capturesettings/afareasetting: Mid
+  capturesettings/subjectdetection: Human
+  capturesettings/drivemode: Sequential
+  capturesettings/imagestabilization: S-IS Auto
+  imgsettings/whitebalance: Automatic
+  imgsettings/imageformat: "Preset 2 + RAW: Large Fine + RAW"
+manual:
+  - ISO Auto upper limit 12800
+notes: 1/640 still freezes most freestyle; splashes blur slightly.
